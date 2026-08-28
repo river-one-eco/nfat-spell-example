@@ -68,10 +68,12 @@ abstract contract SpellRunner is Test {
     address internal executor = INTERVAL_SUBPROXY; // delegatecalls the deal payloads
     address internal skyCore;                      // MCD PauseProxy: Beacon admin, plots payloads
 
-    address internal deployer     = makeAddr("deployer");
-    address internal relayerPrime = makeAddr("relayerPrime"); // subscriber-side operator
-    address internal relayerHalo  = makeAddr("relayerHalo");  // facility-side operator
-    address internal borrower     = makeAddr("borrower");     // deal custodian / offramp destination
+    address internal deployer        = makeAddr("deployer");
+    address internal relayerPrime    = makeAddr("relayerPrime"); // subscriber-side operator
+    address internal relayerHalo     = makeAddr("relayerHalo");  // facility-side operator
+    address internal borrower        = makeAddr("borrower");     // deal custodian / offramp destination
+    address internal revokerHalo     = makeAddr("revokerHalo");  // incident response: revoke the relayer
+    address internal facilityFreezer = makeAddr("facilityFreezer"); // incident response: stop the facility
 
     PAUInstance internal pauPrime;
     PAUInstance internal pauHalo;

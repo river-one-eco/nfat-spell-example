@@ -19,6 +19,7 @@ interface IStarGuardLike {
 
 interface IAccessControlLike {
     function hasRole(bytes32 role, address account) external view returns (bool);
+    function revokeRole(bytes32 role, address account) external;
 }
 
 interface IALMProxyLike {
@@ -36,6 +37,8 @@ interface IPAUFactoryLike {
 
 interface IAdministeredAgentLike {
     function getIsActor(address account) external view returns (bool);
+    function getIsRevoker(address account) external view returns (bool);
+    function removeActor(address account) external;
     function call(address target, bytes calldata data)
         external payable returns (bytes memory result);
 }
@@ -49,6 +52,9 @@ interface INFATFacilityLike {
     function recipient() external view returns (address);
     function buds(address usr) external view returns (uint256);
     function wards(address usr) external view returns (uint256);
+    function cops(address usr) external view returns (uint256);
+    function stopped() external view returns (bool);
+    function stop() external;
     function deposits(address depositor) external view returns (uint256);
     function collectable(uint256 tokenId) external view returns (uint256);
     function ownerOf(uint256 tokenId) external view returns (address);

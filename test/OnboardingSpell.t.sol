@@ -48,7 +48,7 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
     function _castPayloads() internal {
         // Facility side first (it initializes the facility), then the subscriber side.
         _executePayload(address(new NFATHaloOnboardingPayload(
-            pauHalo, agentHalo, facility, relayerHalo, pauPrime.almProxy, borrower
+            pauHalo, agentHalo, facility, relayerHalo, pauPrime.almProxy, borrower, revokerHalo, facilityFreezer
         )));
         _executePayload(address(new NFATPrimeOnboardingPayload(
             pauPrime, agentPrime, facility, relayerPrime
@@ -84,6 +84,11 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         );
         assertTrue(IAccessControlLike(pauHalo.accessControls).hasRole(ALLOCATOR_ROLE, agentHalo));
         assertTrue(IAdministeredAgentLike(agentHalo).getIsActor(relayerHalo));
+
+        // Incident-response roles: a revoker on the agent (can cut off the relayer) and a freezer
+        // (cop) on the facility (can stop() it).
+        assertTrue(IAdministeredAgentLike(agentHalo).getIsRevoker(revokerHalo));
+        assertEq(INFATFacilityLike(facility).cops(facilityFreezer), 1);
 
         assertEq(INFATFacilityLike(facility).recipient(),          pauHalo.almProxy);
         assertEq(INFATFacilityLike(facility).buds(pauHalo.almProxy), 1);
@@ -253,6 +258,57 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
             rlPrime.getCurrentRateLimit(cPrime.nfatPrime_getSubscribeRateLimitKey(facility, usds)),
             5_000_000e18
         );
+    }
+
+    /**********************************************************************************************/
+    /*** Incident response                                                                      ***/
+    /**********************************************************************************************/
+
+    /// @notice The three levers the onboarding wires for reacting to a compromised deal: a freezer
+    ///         that stops the facility, a revoker that cuts off the relayer, and the governance
+    ///         path that revokes the allocator.
+    function test_incidentResponse() external {
+        _castPayloads();
+
+        // Set up a live position: Prime mints and subscribes into the Halo facility.
+        uint256 amount = 1_000_000e18;
+        _primeCall(abi.encodeWithSelector(IControllerDispatchLike.usds_mint.selector, amount));
+        _primeCall(abi.encodeWithSelector(
+            IControllerDispatchLike.nfatPrime_subscribe.selector, facility, amount, ""
+        ));
+        assertEq(INFATFacilityLike(facility).deposits(pauPrime.almProxy), amount);
+
+        // 1. Freezer stops the facility — issue / subscribe / repay / collect all halt.
+        assertFalse(INFATFacilityLike(facility).stopped());
+        vm.prank(facilityFreezer);
+        INFATFacilityLike(facility).stop();
+        assertTrue(INFATFacilityLike(facility).stopped());
+
+        // The Halo relayer can no longer issue against the subscription.
+        vm.expectRevert();
+        _haloCall(abi.encodeWithSelector(
+            IControllerDispatchLike.nfatHalo_issue.selector, facility, pauPrime.almProxy, 1, amount
+        ));
+
+        // 2. Revoker cuts off the Halo relayer (e.g. a compromised operator key).
+        assertTrue(IAdministeredAgentLike(agentHalo).getIsActor(relayerHalo));
+        vm.prank(revokerHalo);
+        IAdministeredAgentLike(agentHalo).removeActor(relayerHalo);
+        assertFalse(IAdministeredAgentLike(agentHalo).getIsActor(relayerHalo));
+
+        // The revoked relayer can no longer route calls through the agent.
+        vm.expectRevert();
+        _haloCall(abi.encodeWithSelector(
+            IControllerDispatchLike.psm_swapUSDSToUSDC.selector, uint256(1)
+        ));
+
+        // 3. Governance (the SubProxy admin) revokes the allocator role from the agent. This
+        //    example keeps allocator revocation on the governance path: AccessControls ships no
+        //    built-in freezer module, so a custom module would be layered on for faster revocation.
+        assertTrue(IAccessControlLike(pauHalo.accessControls).hasRole(ALLOCATOR_ROLE, agentHalo));
+        vm.prank(executor);
+        IAccessControlLike(pauHalo.accessControls).revokeRole(ALLOCATOR_ROLE, agentHalo);
+        assertFalse(IAccessControlLike(pauHalo.accessControls).hasRole(ALLOCATOR_ROLE, agentHalo));
     }
 
 }

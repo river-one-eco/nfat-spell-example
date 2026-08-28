@@ -27,9 +27,11 @@ interface IRateLimitsLike {
  *
  *         1. PAUInit.init — this stack's Controller roles + [NFAT_HALO_FACET] integration
  *            (facet registration on the Beacon is a Sky-core action, NOT done here);
- *         2. PAUInit.addAllocator + AdministeredAgentInit.init — agent routing for the relayer;
+ *         2. PAUInit.addAllocator + AdministeredAgentInit.init — agent routing for the relayer,
+ *            plus a revoker for incident response (can cut off a compromised relayer);
  *         3. NFATInit.init — the deal facility, wired with recipient + bud = THIS stack's
- *            ALMProxy (issued principal flows here; repayments flow back out of here);
+ *            ALMProxy (issued principal flows here; repayments flow back out of here), plus a
+ *            freezer for incident response (can stop() the facility);
  *         4. nfatHalo_setMaxAnnualGrowthRate — deal risk parameter;
  *         5. rate limits — issue (keyed per subscriber — the Prime star's ALMProxy) /
  *            repayPrincipal / repayInterest, plus the PSM USDC<->USDS swap limits (this side
@@ -71,6 +73,8 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
     address public immutable relayer;
     address public immutable subscriber; // the Prime star's ALMProxy (issue limits key on it)
     address public immutable offramp;    // deal custodian / borrower destination for deployed USDC
+    address public immutable revoker;    // incident response: can revoke the relayer (agent actor)
+    address public immutable freezer;    // incident response: can stop() the facility
 
     constructor(
         PAUInstance memory pau,
@@ -78,7 +82,9 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
         address facility_,
         address relayer_,
         address subscriber_,
-        address offramp_
+        address offramp_,
+        address revoker_,
+        address freezer_
     ) {
         accessControls = pau.accessControls;
         almProxy       = pau.almProxy;
@@ -90,6 +96,8 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
         relayer        = relayer_;
         subscriber     = subscriber_;
         offramp        = offramp_;
+        revoker        = revoker_;
+        freezer        = freezer_;
     }
 
     function _execute() internal override {
@@ -115,16 +123,24 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
 
         address[] memory actors = new address[](1);
         actors[0] = relayer;
+        // Incident response: a revoker can removeActor(relayer) to cut off a compromised operator
+        // fast, without waiting on the governance path.
+        address[] memory revokers = new address[](1);
+        revokers[0] = revoker;
         AdministeredAgentInit.init(agent, AdministeredAgentInitParams({
             admins:   new address[](0), //Note: Add extra admins such as PAS if applicable
             actors:   actors,
             grantors: new address[](0), //Note: Add grantors if applicable
-            revokers: new address[](0)  //Note: Add revokers if applicable
+            revokers: revokers
         }));
 
         // 3. NFAT: the deal facility — recipient + bud = THIS stack's ALMProxy. The Halo facet
         //    issues and repays through it. No operators: issuance goes through the facet.
         //    (No chainlog registration: stars track addresses in their own registry.)
+        // Incident response: a freezer (cop) can stop() the facility to halt issue / subscribe /
+        // repay / collect immediately if something goes wrong with the deal.
+        address[] memory freezers = new address[](1);
+        freezers[0] = freezer;
         NFATInit.init(dss, facility, NFATConfig({
             name:            FACILITY_NAME,
             symbol:          FACILITY_SYMBOL,
@@ -132,7 +148,7 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
             identityNetwork: address(0),
             baseURI:         "",
             operators:       new address[](0),
-            freezers:        new address[](0)
+            freezers:        freezers
         }));
 
         // 4. Deal risk parameter: interest growth cap.
