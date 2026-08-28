@@ -23,6 +23,8 @@ interface IControllerDispatchLike {
     function nfatPrime_getCollectRateLimitKey(address facility)
         external pure returns (bytes32 key);
 
+    function nfatPrime_VERSION() external pure returns (string memory);
+
     // --- NFAT Halo facet ---
 
     function nfatHalo_setMaxAnnualGrowthRate(address facility, uint256 maxAnnualGrowthRate)
@@ -55,6 +57,14 @@ interface IControllerDispatchLike {
             uint256 maxOutstandingInterest,
             uint256 interestIndex
         );
+
+    function nfatHalo_getMaxAnnualGrowthRate(address facility)
+        external view returns (uint256 maxAnnualGrowthRate);
+
+    function nfatHalo_getFacilityState(address facility)
+        external view returns (uint256 interestIndex, uint256 lastUpdated);
+
+    function nfatHalo_VERSION() external pure returns (string memory);
 
     // --- USDS facet (live on the canonical Beacon) ---
 

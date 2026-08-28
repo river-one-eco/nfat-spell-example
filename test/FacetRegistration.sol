@@ -51,7 +51,7 @@ library FacetRegistration {
             INFATPrimeFacet.getWithdrawRateLimitKey.selector
         );
         wires[6] = IEnumerableIntegrations.Wire(
-            bytes4(keccak256("nfatPrime_VERSION()")),
+            IControllerDispatchLike.nfatPrime_VERSION.selector,
             IFacet.VERSION.selector
         );
 
@@ -82,11 +82,11 @@ library FacetRegistration {
             INFATHaloFacet.repayInterest.selector
         );
         wires[4] = IEnumerableIntegrations.Wire(
-            bytes4(keccak256("nfatHalo_getMaxAnnualGrowthRate(address)")),
+            IControllerDispatchLike.nfatHalo_getMaxAnnualGrowthRate.selector,
             INFATHaloFacet.getMaxAnnualGrowthRate.selector
         );
         wires[5] = IEnumerableIntegrations.Wire(
-            bytes4(keccak256("nfatHalo_getFacilityState(address)")),
+            IControllerDispatchLike.nfatHalo_getFacilityState.selector,
             INFATHaloFacet.getFacilityState.selector
         );
         wires[6] = IEnumerableIntegrations.Wire(
@@ -110,7 +110,7 @@ library FacetRegistration {
             INFATHaloFacet.getRepayPrincipalRateLimitKey.selector
         );
         wires[11] = IEnumerableIntegrations.Wire(
-            bytes4(keccak256("nfatHalo_VERSION()")),
+            IControllerDispatchLike.nfatHalo_VERSION.selector,
             IFacet.VERSION.selector
         );
 
