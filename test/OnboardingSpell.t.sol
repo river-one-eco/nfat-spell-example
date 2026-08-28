@@ -134,8 +134,21 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
             ),
             2_000_000e6
         );
-        // The Prime controller doesn't even have the PSM facet integrated (dispatching
-        // psm_* selectors on it reverts), and its RateLimits holds nothing at the PSM key.
+        // The Prime controller doesn't even have the PSM facet integrated: dispatching a psm_*
+        // selector through the Prime agent hits the Controller's fallback with no wired facet and
+        // reverts with CallSelectorNotWired(psm_swapUSDSToUSDC).
+        vm.prank(relayerPrime);
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "CallSelectorNotWired(bytes4)", IControllerDispatchLike.psm_swapUSDSToUSDC.selector
+            )
+        );
+        IAdministeredAgentLike(agentPrime).call(
+            pauPrime.controller,
+            abi.encodeWithSelector(IControllerDispatchLike.psm_swapUSDSToUSDC.selector, uint256(1))
+        );
+
+        // And its RateLimits holds nothing at the PSM key.
         assertEq(
             IRateLimitsLike(pauPrime.rateLimits).getCurrentRateLimit(
                 cHalo.psm_usdsToUSDCSwapRateLimitKey()
@@ -284,8 +297,9 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         INFATFacilityLike(facility).stop();
         assertTrue(INFATFacilityLike(facility).stopped());
 
-        // The Halo relayer can no longer issue against the subscription.
-        vm.expectRevert();
+        // The Halo relayer can no longer issue against the subscription — the facility's
+        // notStopped modifier reverts, bubbling up through the facet / controller / agent.
+        vm.expectRevert("NFATFacility/stopped");
         _haloCall(abi.encodeWithSelector(
             IControllerDispatchLike.nfatHalo_issue.selector, facility, pauPrime.almProxy, 1, amount
         ));
@@ -296,8 +310,8 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         IAdministeredAgentLike(agentHalo).removeActor(relayerHalo);
         assertFalse(IAdministeredAgentLike(agentHalo).getIsActor(relayerHalo));
 
-        // The revoked relayer can no longer route calls through the agent.
-        vm.expectRevert();
+        // The revoked relayer can no longer route calls through the agent (NotActor()).
+        vm.expectRevert(abi.encodeWithSignature("NotActor()"));
         _haloCall(abi.encodeWithSelector(
             IControllerDispatchLike.psm_swapUSDSToUSDC.selector, uint256(1)
         ));
