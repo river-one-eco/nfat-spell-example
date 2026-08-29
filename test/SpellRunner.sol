@@ -3,7 +3,7 @@ pragma solidity ^0.8.34;
 
 import { Test } from "forge-std/Test.sol";
 
-import { NFATFacility } from "../lib/nfat/src/NFATFacility.sol";
+import { NFATDeploy } from "./dependencies/NFATDeploy.sol";
 
 import { NFATPrimeFacet } from "../lib/diamond-pau/src/facets/nfat-prime/NFATPrimeFacet.sol";
 import { NFATHaloFacet }  from "../lib/diamond-pau/src/facets/nfat-halo/NFATHaloFacet.sol";
@@ -109,10 +109,9 @@ abstract contract SpellRunner is Test {
         haloFacet  = address(new NFATHaloFacet());
 
         // The deal facility (name/symbol must match the Halo payload's constants — NFATInit
-        // sanity-checks them). Sole ward is handed to the SubProxy.
-        facility = address(new NFATFacility(usds, "NFAT Example Deal", "NFAT-EX"));
-        NFATFacility(facility).rely(executor);
-        NFATFacility(facility).deny(deployer);
+        // sanity-checks them). NFATDeploy builds it against the chainlog USDS gem and hands sole
+        // ward to the SubProxy via switchOwner.
+        facility = NFATDeploy.deploy(deployer, executor, "USDS", "NFAT Example Deal", "NFAT-EX");
 
         vm.stopPrank();
 

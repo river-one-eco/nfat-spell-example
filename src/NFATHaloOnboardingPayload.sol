@@ -143,6 +143,7 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
         address[] memory freezers = new address[](1);
         freezers[0] = freezer;
         NFATInit.init(dss, facility, NFATConfig({
+            gemKey:          "USDS",
             name:            FACILITY_NAME,
             symbol:          FACILITY_SYMBOL,
             almProxy:        almProxy,
