@@ -25,8 +25,9 @@ interface IRateLimitsLike {
  *         through its ALMProxy. Because the facility belongs to THIS star, the facility
  *         initialization (`NFATInit`) lives here — never in the Prime (subscriber-side) payload.
  *
- *         1. PAUInit.init — this stack's Controller roles + [NFAT_HALO_FACET] integration
- *            (facet registration on the Beacon is a Sky-core action, NOT done here);
+ *         1. PAUInit.init — this stack's Controller roles + [NFAT_HALO_FACET, PSM_FACET,
+ *            TRANSFER_ASSET_FACET] integrations (facet registration on the Beacon is a Sky-core
+ *            action, NOT done here);
  *         2. PAUInit.addAllocator + AdministeredAgentInit.init — agent routing for the relayer,
  *            plus a revoker for incident response (can cut off a compromised relayer);
  *         3. NFATInit.init — the deal facility, wired with recipient + bud = THIS stack's

@@ -37,7 +37,7 @@ payload shape those repos use.
 
 **`src/NFATHaloOnboardingPayload.sol`** — the **facility-operator (borrower) side**:
 
-1. `PAUInit.init` — its stack's Controller roles + `[NFAT_HALO_FACET]`;
+1. `PAUInit.init` — its stack's Controller roles + `[NFAT_HALO_FACET, PSM_FACET, TRANSFER_ASSET_FACET]`;
 2. `PAUInit.addAllocator` + `AdministeredAgentInit.init` — agent as allocator, relayer as actor;
 3. `NFATInit.init` — **the deal facility**, wired with recipient + bud = the HALO ALMProxy (the
    facility belongs to this side; the facet issues/repays through it). Chainlog registration was
