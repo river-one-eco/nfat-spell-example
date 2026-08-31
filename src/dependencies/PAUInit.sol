@@ -3,11 +3,11 @@ pragma solidity ^0.8.34;
 
 interface IAccessControlLike {
 
+    function getRoleMemberCount(bytes32 role) external view returns (uint256);
+
     function grantRole(bytes32 role, address account) external;
 
     function hasRole(bytes32 role, address account) external view returns (bool);
-
-    function revokeRole(bytes32 role, address account) external;
 
 }
 
@@ -95,6 +95,12 @@ library PAUInit {
             IAccessControlLike(inst.accessControls).hasRole(DEFAULT_ADMIN_ROLE, address(this)),
             "PAUInit/not-access-controls-admin"
         );
+        // AccessControls is the sole enumerable component (ALMProxy/RateLimits use non-enumerable
+        // AccessControl), so this is the one place we can assert governance is the *only* admin.
+        require(
+            IAccessControlLike(inst.accessControls).getRoleMemberCount(DEFAULT_ADMIN_ROLE) == 1,
+            "PAUInit/access-controls-not-sole-admin"
+        );
         require(
             IAccessControlLike(inst.almProxy).hasRole(DEFAULT_ADMIN_ROLE, address(this)),
             "PAUInit/not-alm-proxy-admin"
@@ -120,11 +126,18 @@ library PAUInit {
 
     /**
      * @notice Grants an AdministeredAgent the ALLOCATOR_ROLE on the stack's AccessControls.
+     * @dev The caller of this function must be a role admin for `ALLOCATOR_ROLE`
+     * @dev Checks the access controls on `inst` matches the controller's
      * @param  inst  The PAU stack.
      * @param  agent The AdministeredAgent to grant.
      */
     function addAllocator(PAUInstance memory inst, address agent) internal {
         require(agent != address(0), "PAUInit/agent-zero-address");
+
+        require(
+            IControllerLike(inst.controller).accessControls() == inst.accessControls,
+            "PAUInit/controller-access-controls-mismatch"
+        );
 
         IAccessControlLike(inst.accessControls).grantRole(ALLOCATOR_ROLE, agent);
     }

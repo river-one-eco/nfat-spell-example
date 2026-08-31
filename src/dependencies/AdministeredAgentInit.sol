@@ -11,6 +11,8 @@ interface IAdministeredAgentLike {
 
     function addRevoker(address account) external;
 
+    function adminCount() external view returns (uint256);
+
     function getIsAdmin(address account) external view returns (bool);
 
 }
@@ -44,6 +46,9 @@ library AdministeredAgentInit {
 
     /**
      * @notice Configures an AdministeredAgent's roles in bulk.
+     * @dev    This function is NOT idempotent. The agent's add* functions reject duplicates, so
+     *         re-running init (or passing an address already holding a role) reverts. Unlike
+     *         PAUInit.init in diamond-pau, it cannot be safely applied twice.
      * @param  agent The agent to configure.
      * @param  p     Role configuration.
      */
@@ -52,26 +57,23 @@ library AdministeredAgentInit {
 
         IAdministeredAgentLike agent_ = IAdministeredAgentLike(agent);
 
-        // Sanity check: the executing context must be an admin on the agent.
+        // Sanity check: the executing context must be the agent's sole admin.
         require(agent_.getIsAdmin(address(this)), "AdministeredAgentInit/not-admin");
+        require(agent_.adminCount() == 1,         "AdministeredAgentInit/not-sole-admin");
 
         for (uint256 i = 0; i < p.admins.length; ++i) {
-            require(p.admins[i] != address(0), "AdministeredAgentInit/admin-zero-address");
             agent_.addAdmin(p.admins[i]);
         }
 
         for (uint256 i = 0; i < p.actors.length; ++i) {
-            require(p.actors[i] != address(0), "AdministeredAgentInit/actor-zero-address");
             agent_.addActor(p.actors[i]);
         }
 
         for (uint256 i = 0; i < p.grantors.length; ++i) {
-            require(p.grantors[i] != address(0), "AdministeredAgentInit/grantor-zero-address");
             agent_.addGrantor(p.grantors[i]);
         }
 
         for (uint256 i = 0; i < p.revokers.length; ++i) {
-            require(p.revokers[i] != address(0), "AdministeredAgentInit/revoker-zero-address");
             agent_.addRevoker(p.revokers[i]);
         }
     }
