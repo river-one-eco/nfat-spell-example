@@ -40,15 +40,25 @@ payload shape those repos use.
 1. `PAUInit.init` — its stack's Controller roles + `[NFAT_HALO_FACET, PSM_FACET, TRANSFER_ASSET_FACET]`;
 2. `PAUInit.addAllocator` + `AdministeredAgentInit.init` — agent as allocator, relayer as actor;
 3. `NFATInit.init` — **the deal facility**, wired with recipient + bud = the HALO ALMProxy (the
-   facility belongs to this side; the facet issues/repays through it). Chainlog registration was
-   removed from `NFATInit` entirely: the Sky chainlog is PauseProxy-writable only — verified
+   facility belongs to this side; the facet issues/repays through it). 
    on-chain, `chainlog.wards(INTERVAL_SUBPROXY) == 0` — and stars track addresses in their own
    registry, as pattern-spells / spark-spells do;
 4. `nfatHalo_setMaxAnnualGrowthRate` — 20% APR deal risk parameter;
-5. **rate limits** — issue (keyed per subscriber: the Prime star's ALMProxy) / repayPrincipal /
-   repayInterest + the PSM USDC<->USDS swap limits + the **TransferAsset offramp limit** (USDC →
-   the deal's borrower/custodian destination — the only rate-limited exit from the proxy; the
-   subscriber side stays USDS-only).
+5. **rate limits**:
+   - **issue** — one limit per subscriber, keyed on that Prime star's ALMProxy, with its own cap + slope;
+   - **repayPrincipal** / **repayInterest** — on the facility, in USDS;
+   - **PSM swaps** — USDC -> USDS and USDS -> USDC (the subscriber side stays USDS-only);
+   - **TransferAsset offramp** — USDC to the deal's borrower/custodian destination, the only
+     rate-limited exit from the proxy.
+
+**Subscribers.** An NFAT may have several prime subscribers. `_subscribers()` returns them as
+`Subscriber { subscriber, maxAmount, slope }` entries built from `constant`s — no storage, because
+the SubProxy *delegatecalls* the payload (see the
+[star-spell reviewer checklist](https://github.com/sky-ecosystem/pe-checklists/blob/master/spell/star-spell-reviewer-checklist.md):
+every variable `constant` or `immutable`). `_execute` validates the list first (non-empty, no zero
+address / cap / slope, no duplicates) so a bad list reverts before any state changes. It is
+`virtual` only so the test harness (`test/NFATHaloOnboardingPayloadHarness.sol`) can substitute
+the Prime stack deployed at runtime.
 
 **`src/NFATPrimeOnboardingPayload.sol`** — the **subscriber (investor) side**. No `NFATInit` —
 the facility is not this star's:
@@ -61,12 +71,15 @@ the facility is not this star's:
    buffer `0x67Ac…8AfD` — same wiring as spark's `initAlmSystem`);
 4. **rate limits** — subscribe / withdraw / collect on the deal facility + USDS mint.
 
-All rate limits use the Sky ALM convention **`slope = cap / 1 day`** (a consumed limit recharges
-linearly back to its cap over a day) and both payloads copy the audited init libraries verbatim
-(`src/dependencies/`) — exactly what a real spell does.
+
 
 ## What the tests prove (`test/OnboardingSpell.t.sol`)
 
+- **Subscribers** (`test_onboarding_multipleSubscribers`, `test_issueLimit_isPerSubscriber`,
+  `test_execute_validatesSubscribers`, `test_onboarding_defaultSubscriberConstants`): each
+  subscriber gets exactly its configured issue limit and nobody else does; issuance to one prime is
+  capped by *its* limit regardless of the others; bad lists revert the cast; the unmodified payload
+  casts with its constant list.
 - **`test_onboarding_wiresBothSides`**: casts both payloads and asserts each side's wiring — the
   facility's recipient + bud are the HALO ALMProxy (and NOT the Prime one), each stack's
   Controller roles, agents, and rate limits.

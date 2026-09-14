@@ -3,8 +3,10 @@ pragma solidity ^0.8.34;
 
 import { SpellRunner } from "./SpellRunner.sol";
 
-import { NFATPrimeOnboardingPayload } from "../src/NFATPrimeOnboardingPayload.sol";
-import { NFATHaloOnboardingPayload }  from "../src/NFATHaloOnboardingPayload.sol";
+import { NFATPrimeOnboardingPayload }            from "../src/NFATPrimeOnboardingPayload.sol";
+import { NFATHaloOnboardingPayload, Subscriber } from "../src/NFATHaloOnboardingPayload.sol";
+
+import { NFATHaloOnboardingPayloadHarness } from "./NFATHaloOnboardingPayloadHarness.sol";
 
 import { IControllerDispatchLike } from "../src/interfaces/IControllerDispatchLike.sol";
 
@@ -16,6 +18,16 @@ import {
     IERC20Like,
     INFATFacilityLike
 } from "./Interfaces.sol";
+
+interface IRateLimitsDataLike {
+    struct RateLimitData {
+        uint256 maxAmount;
+        uint256 slope;
+        uint256 lastAmount;
+        uint256 lastUpdated;
+    }
+    function getRateLimitData(bytes32 key) external view returns (RateLimitData memory data);
+}
 
 /**
  * @notice End-to-end demonstration of one NFAT deal between two PAU stacks: the Halo payload
@@ -29,6 +41,9 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
     bytes32 internal constant ALLOCATOR_ROLE = keccak256("ALLOCATOR_ROLE");
 
     address internal constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
+    // The Prime star's issue rate limit on the Halo side (cap = its deal commitment, slope = cap / day).
+    uint256 internal constant PRIME_ISSUE_LIMIT = 5_000_000e18;
 
     IControllerDispatchLike internal cPrime;
     IControllerDispatchLike internal cHalo;
@@ -46,13 +61,36 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
     /**********************************************************************************************/
 
     function _castPayloads() internal {
+        Subscriber[] memory subs = new Subscriber[](1);
+        subs[0] = _sub(pauPrime.almProxy, PRIME_ISSUE_LIMIT);
+        _castPayloads(subs);
+    }
+
+    function _castPayloads(Subscriber[] memory subs) internal {
         // Facility side first (it initializes the facility), then the subscriber side.
-        _executePayload(address(new NFATHaloOnboardingPayload(
-            pauHalo, agentHalo, facility, relayerHalo, pauPrime.almProxy, borrower, revokerHalo, facilityFreezer
-        )));
+        _executePayload(address(_newHaloPayload(subs)));
         _executePayload(address(new NFATPrimeOnboardingPayload(
             pauPrime, agentPrime, facility, relayerPrime
         )));
+    }
+
+    /// @dev The Halo payload lists its subscribers as constants; the harness overrides
+    ///      `_subscribers()` so the test can point at the Prime stack it deployed at runtime.
+    function _newHaloPayload(Subscriber[] memory subs) internal returns (NFATHaloOnboardingPayload) {
+        return new NFATHaloOnboardingPayloadHarness(
+            pauHalo, agentHalo, facility, relayerHalo, borrower, revokerHalo, facilityFreezer, subs
+        );
+    }
+
+    /// @dev Subscriber with the Sky ALM convention slope = cap / 1 day.
+    function _sub(address subscriber, uint256 maxAmount) internal pure returns (Subscriber memory) {
+        return Subscriber({ subscriber: subscriber, maxAmount: maxAmount, slope: maxAmount / 1 days });
+    }
+
+    function _issueLimit(address subscriber) internal view returns (uint256) {
+        return IRateLimitsLike(pauHalo.rateLimits).getCurrentRateLimit(
+            cHalo.nfatHalo_getIssueRateLimitKey(facility, subscriber)
+        );
     }
 
     function _primeCall(bytes memory data) internal {
@@ -111,12 +149,7 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
             ),
             5_000_000e18
         );
-        assertEq(
-            IRateLimitsLike(pauHalo.rateLimits).getCurrentRateLimit(
-                cHalo.nfatHalo_getIssueRateLimitKey(facility, pauPrime.almProxy)
-            ),
-            5_000_000e18
-        );
+        assertEq(_issueLimit(pauPrime.almProxy), PRIME_ISSUE_LIMIT);
 
         // The offramp (TransferAsset) limit: USDC can only leave the Halo proxy to the
         // reviewed borrower destination, rate-limited.
@@ -155,6 +188,183 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
             ),
             0
         );
+    }
+
+    /**********************************************************************************************/
+    /*** Multiple subscribers                                                                   ***/
+    /**********************************************************************************************/
+
+    /// @notice An NFAT may have several prime subscribers, each with its own issue limit. The Halo
+    ///         payload sets one issue limit per subscriber, with exactly the cap + slope given,
+    ///         and leaves every other address with no issue limit at all.
+    function test_onboarding_multipleSubscribers() external {
+        address prime2 = makeAddr("prime2ALMProxy");
+        address prime3 = makeAddr("prime3ALMProxy");
+
+        Subscriber[] memory subs = new Subscriber[](3);
+        subs[0] = _sub(pauPrime.almProxy, PRIME_ISSUE_LIMIT);
+        subs[1] = _sub(prime2,            2_500_000e18);
+        // Not the cap / 1 day convention: an explicit 1 USDS/sec recharge — the slope is taken as given.
+        subs[2] = Subscriber({ subscriber: prime3, maxAmount: 750_000e18, slope: 1e18 });
+
+        NFATHaloOnboardingPayload payload = _newHaloPayload(subs);
+
+        // The payload exposes what it will apply.
+        Subscriber[] memory listed = payload.subscribers();
+        assertEq(listed.length, 3);
+        for (uint256 i = 0; i < 3; ++i) {
+            assertEq(listed[i].subscriber, subs[i].subscriber);
+            assertEq(listed[i].maxAmount,  subs[i].maxAmount);
+            assertEq(listed[i].slope,      subs[i].slope);
+        }
+
+        _executePayload(address(payload));
+
+        // One issue limit per subscriber with exactly the configured cap + slope.
+        for (uint256 i = 0; i < 3; ++i) {
+            IRateLimitsDataLike.RateLimitData memory d = IRateLimitsDataLike(pauHalo.rateLimits)
+                .getRateLimitData(cHalo.nfatHalo_getIssueRateLimitKey(facility, subs[i].subscriber));
+            assertEq(d.maxAmount, subs[i].maxAmount);
+            assertEq(d.slope,     subs[i].slope);
+            assertEq(_issueLimit(subs[i].subscriber), subs[i].maxAmount);
+        }
+
+        // A non-subscriber has no issue limit.
+        assertEq(_issueLimit(makeAddr("notASubscriber")), 0);
+
+        // The aggregate repay limits are unchanged by the number of subscribers.
+        assertEq(
+            IRateLimitsLike(pauHalo.rateLimits).getCurrentRateLimit(
+                cHalo.nfatHalo_getRepayPrincipalRateLimitKey(facility, usds)
+            ),
+            5_000_000e18
+        );
+    }
+
+    /// @notice Issuance is enforced per subscriber: a second prime can only be issued up to ITS
+    ///         cap, regardless of headroom on the others.
+    function test_issueLimit_isPerSubscriber() external {
+        address prime2 = makeAddr("prime2ALMProxy");
+
+        Subscriber[] memory subs = new Subscriber[](2);
+        subs[0] = _sub(pauPrime.almProxy, PRIME_ISSUE_LIMIT);
+        subs[1] = _sub(prime2,            1_000_000e18);
+        _castPayloads(subs);
+
+        // Both subscribe 2M so the facility holds enough deposit for either issue.
+        uint256 depositAmount = 2_000_000e18;
+        deal(usds, pauPrime.almProxy, depositAmount);
+        _primeCall(abi.encodeWithSelector(
+            IControllerDispatchLike.nfatPrime_subscribe.selector, facility, depositAmount, ""
+        ));
+        deal(usds, prime2, depositAmount);
+        vm.startPrank(prime2);
+        IERC20Like(usds).approve(facility, depositAmount);
+        INFATFacilityLike(facility).subscribe(depositAmount, "");
+        vm.stopPrank();
+
+        // 1.5M to prime2 exceeds its 1M cap -> rate limited, even though the first prime has 5M
+        // of headroom.
+        vm.expectRevert("RateLimits/rate-limit-exceeded");
+        _haloCall(abi.encodeWithSelector(
+            IControllerDispatchLike.nfatHalo_issue.selector, facility, prime2, 1, 1_500_000e18
+        ));
+
+        // 1M to prime2 is exactly its cap -> succeeds and drains its limit to 0.
+        _haloCall(abi.encodeWithSelector(
+            IControllerDispatchLike.nfatHalo_issue.selector, facility, prime2, 1, 1_000_000e18
+        ));
+        assertEq(INFATFacilityLike(facility).ownerOf(1), prime2);
+        assertEq(_issueLimit(prime2),            0);
+        assertEq(_issueLimit(pauPrime.almProxy), PRIME_ISSUE_LIMIT);
+
+        // The first prime's limit is untouched: 1.5M to it goes through.
+        _haloCall(abi.encodeWithSelector(
+            IControllerDispatchLike.nfatHalo_issue.selector, facility, pauPrime.almProxy, 2, 1_500_000e18
+        ));
+        assertEq(INFATFacilityLike(facility).ownerOf(2), pauPrime.almProxy);
+        assertEq(_issueLimit(pauPrime.almProxy), PRIME_ISSUE_LIMIT - 1_500_000e18);
+    }
+
+    /// @notice The subscriber list is validated first thing in `_execute`, before any state is
+    ///         touched, so a bad list reverts the whole cast atomically. Exercised via a direct
+    ///         `execute()` call: the validation runs before the first external call either way.
+    function test_execute_validatesSubscribers() external {
+        // Empty list.
+        Subscriber[] memory none = new Subscriber[](0);
+        NFATHaloOnboardingPayload p_none = _newHaloPayload(none);
+        vm.expectRevert(NFATHaloOnboardingPayload.NoSubscribers.selector);
+        p_none.execute();
+
+        // Zero address.
+        Subscriber[] memory zeroAddr = new Subscriber[](2);
+        zeroAddr[0] = _sub(pauPrime.almProxy, 1e18);
+        zeroAddr[1] = _sub(address(0),        1e18);
+        NFATHaloOnboardingPayload p_zeroAddr = _newHaloPayload(zeroAddr);
+        vm.expectRevert(abi.encodeWithSelector(NFATHaloOnboardingPayload.ZeroSubscriber.selector, 1));
+        p_zeroAddr.execute();
+
+        // Zero cap.
+        Subscriber[] memory zeroMax = new Subscriber[](1);
+        zeroMax[0] = Subscriber({ subscriber: pauPrime.almProxy, maxAmount: 0, slope: 1 });
+        NFATHaloOnboardingPayload p_zeroMax = _newHaloPayload(zeroMax);
+        vm.expectRevert(abi.encodeWithSelector(NFATHaloOnboardingPayload.ZeroMaxAmount.selector, 0));
+        p_zeroMax.execute();
+
+        // Zero slope (the limit would never recharge).
+        Subscriber[] memory zeroSlope = new Subscriber[](1);
+        zeroSlope[0] = Subscriber({ subscriber: pauPrime.almProxy, maxAmount: 1e18, slope: 0 });
+        NFATHaloOnboardingPayload p_zeroSlope = _newHaloPayload(zeroSlope);
+        vm.expectRevert(abi.encodeWithSelector(NFATHaloOnboardingPayload.ZeroSlope.selector, 0));
+        p_zeroSlope.execute();
+
+        // Duplicate subscriber (would silently overwrite the first limit).
+        Subscriber[] memory dup = new Subscriber[](3);
+        dup[0] = _sub(pauPrime.almProxy,          1e18);
+        dup[1] = _sub(makeAddr("prime2ALMProxy"), 2e18);
+        dup[2] = _sub(pauPrime.almProxy,          3e18);
+        NFATHaloOnboardingPayload p_dup = _newHaloPayload(dup);
+        vm.expectRevert(abi.encodeWithSelector(NFATHaloOnboardingPayload.DuplicateSubscriber.selector, 2));
+        p_dup.execute();
+
+        // Nothing on the Halo side was touched by the failed casts.
+        assertEq(INFATFacilityLike(facility).recipient(), address(0));
+    }
+
+    /// @notice The test harness holds at most three immutable subscriber triples.
+    function test_harness_rejectsMoreThanThreeSubscribers() external {
+        Subscriber[] memory four = new Subscriber[](4);
+        for (uint256 i = 0; i < 4; ++i) {
+            four[i] = _sub(makeAddr(string(abi.encodePacked("prime", i))), 1e18);
+        }
+        vm.expectRevert(
+            abi.encodeWithSelector(NFATHaloOnboardingPayloadHarness.TooManySubscribers.selector, 4, 3)
+        );
+        _newHaloPayload(four);
+    }
+
+    /// @notice The unmodified payload (no harness) casts with its constant subscriber list: one
+    ///         issue limit per listed Prime ALMProxy, with exactly the constants' cap + slope.
+    function test_onboarding_defaultSubscriberConstants() external {
+        NFATHaloOnboardingPayload payload = new NFATHaloOnboardingPayload(
+            pauHalo, agentHalo, facility, relayerHalo, borrower, revokerHalo, facilityFreezer
+        );
+        Subscriber[] memory subs = payload.subscribers();
+        assertEq(subs.length, 2);
+        assertEq(subs[0].subscriber, 0x1111111111111111111111111111111111111111);
+        assertEq(subs[1].subscriber, 0x2222222222222222222222222222222222222222);
+
+        _executePayload(address(payload));
+
+        for (uint256 i = 0; i < subs.length; ++i) {
+            IRateLimitsDataLike.RateLimitData memory d = IRateLimitsDataLike(pauHalo.rateLimits)
+                .getRateLimitData(cHalo.nfatHalo_getIssueRateLimitKey(facility, subs[i].subscriber));
+            assertEq(d.maxAmount, subs[i].maxAmount);
+            assertEq(d.slope,     subs[i].slope);
+        }
+        assertEq(_issueLimit(subs[0].subscriber), 5_000_000e18);
+        assertEq(_issueLimit(subs[1].subscriber), 2_500_000e18);
+        assertEq(_issueLimit(pauPrime.almProxy),  0);
     }
 
     /**********************************************************************************************/
