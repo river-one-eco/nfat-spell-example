@@ -71,22 +71,6 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
     address internal constant PRIME_A_ALM_PROXY = 0x1111111111111111111111111111111111111111;
     address internal constant PRIME_B_ALM_PROXY = 0x2222222222222222222222222222222222222222;
 
-    // Deal parameters (example values). Slope = cap / 1 day. Issue limits are per subscriber:
-    // each entry of `_subscribers()` carries its own cap + slope.
-    uint256 internal constant MAX_ANNUAL_GROWTH_RATE = 0.20e18; // 20% APR cap
-    uint256 internal constant PRIME_A_ISSUE_LIMIT    = 5_000_000e18;
-    uint256 internal constant PRIME_A_ISSUE_SLOPE    = PRIME_A_ISSUE_LIMIT / 1 days;
-    uint256 internal constant PRIME_B_ISSUE_LIMIT    = 2_500_000e18;
-    uint256 internal constant PRIME_B_ISSUE_SLOPE    = PRIME_B_ISSUE_LIMIT / 1 days;
-    uint256 internal constant REPAY_PRINCIPAL_LIMIT  = 5_000_000e18;
-    uint256 internal constant REPAY_PRINCIPAL_SLOPE  = REPAY_PRINCIPAL_LIMIT / 1 days;
-    uint256 internal constant REPAY_INTEREST_LIMIT   = 1_000_000e18;
-    uint256 internal constant REPAY_INTEREST_SLOPE   = REPAY_INTEREST_LIMIT / 1 days;
-    uint256 internal constant PSM_SWAP_LIMIT         = 2_000_000e6; // USDC precision
-    uint256 internal constant PSM_SWAP_SLOPE         = PSM_SWAP_LIMIT / 1 days;
-    uint256 internal constant OFFRAMP_LIMIT          = 2_000_000e6; // USDC precision
-    uint256 internal constant OFFRAMP_SLOPE          = OFFRAMP_LIMIT / 1 days;
-
     address public immutable accessControls;
     address public immutable almProxy;
     address public immutable beacon;
@@ -142,13 +126,13 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
         subs = new Subscriber[](2);
         subs[0] = Subscriber({
             subscriber: PRIME_A_ALM_PROXY,
-            maxAmount:  PRIME_A_ISSUE_LIMIT,
-            slope:      PRIME_A_ISSUE_SLOPE
+            maxAmount:  5_000_000e18,
+            slope:      uint256(5_000_000e18) / 1 days
         });
         subs[1] = Subscriber({
             subscriber: PRIME_B_ALM_PROXY,
-            maxAmount:  PRIME_B_ISSUE_LIMIT,
-            slope:      PRIME_B_ISSUE_SLOPE
+            maxAmount:  2_500_000e18,
+            slope:      uint256(2_500_000e18) / 1 days
         });
     }
 
@@ -194,6 +178,7 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
 
         address[] memory actors = new address[](1);
         actors[0] = relayer;
+
         // Incident response: a revoker can removeActor(relayer) to cut off a compromised operator
         // fast, without waiting on the governance path.
         address[] memory revokers = new address[](1);
@@ -223,9 +208,9 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
             freezers:        freezers
         }));
 
-        // 4. Deal risk parameter: interest growth cap.
+        // 4. Deal risk parameter: interest growth cap (20% APR).
         IControllerDispatchLike c = IControllerDispatchLike(controller);
-        c.nfatHalo_setMaxAnnualGrowthRate(facility, MAX_ANNUAL_GROWTH_RATE);
+        c.nfatHalo_setMaxAnnualGrowthRate(facility, 0.20e18);
 
         // 5. Rate limits. Issue limits are keyed per subscriber (each Prime star's ALMProxy), each
         //    with its own cap + slope.
@@ -237,27 +222,31 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
             );
         }
 
+        // NFAT Halo Rate Limits
         IRateLimitsLike(rateLimits).setRateLimitData(
             c.nfatHalo_getRepayPrincipalRateLimitKey(facility, USDS),
-            REPAY_PRINCIPAL_LIMIT,
-            REPAY_PRINCIPAL_SLOPE
+            5_000_000e18,
+            uint256(5_000_000e18) / 1 days
         );
         IRateLimitsLike(rateLimits).setRateLimitData(
             c.nfatHalo_getRepayInterestRateLimitKey(facility, USDS),
-            REPAY_INTEREST_LIMIT,
-            REPAY_INTEREST_SLOPE
-        );
-        IRateLimitsLike(rateLimits).setRateLimitData(
-            c.psm_usdcToUSDSSwapRateLimitKey(), PSM_SWAP_LIMIT, PSM_SWAP_SLOPE
-        );
-        IRateLimitsLike(rateLimits).setRateLimitData(
-            c.psm_usdsToUSDCSwapRateLimitKey(), PSM_SWAP_LIMIT, PSM_SWAP_SLOPE
+            1_000_000e18,
+            uint256(1_000_000e18) / 1 days
         );
 
-        // Offramp: rate-limited per (asset, destination) — the ONLY door deployed USDC can
-        // leave the ALMProxy through, and only to the reviewed destination.
+        // PSM swaps (USDC precision eth-mainnet) Rate Limits
         IRateLimitsLike(rateLimits).setRateLimitData(
-            c.transferAsset_getTransferRateLimitKey(USDC, offramp), OFFRAMP_LIMIT, OFFRAMP_SLOPE
+            c.psm_usdcToUSDSSwapRateLimitKey(), 2_000_000e6, uint256(2_000_000e6) / 1 days
+        );
+        IRateLimitsLike(rateLimits).setRateLimitData(
+            c.psm_usdsToUSDCSwapRateLimitKey(), 2_000_000e6, uint256(2_000_000e6) / 1 days
+        );
+
+        // Offramp (USDC precision eth-mainnet) Rate Limits
+        IRateLimitsLike(rateLimits).setRateLimitData(
+            c.transferAsset_getTransferRateLimitKey(USDC, offramp),
+            2_000_000e6,
+            uint256(2_000_000e6) / 1 days
         );
     }
 
