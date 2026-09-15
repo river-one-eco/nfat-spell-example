@@ -47,17 +47,6 @@ contract NFATPrimeOnboardingPayload is NFATPayloadBase {
     address internal constant ALLOCATOR_INTERVAL_A_VAULT  = 0xDD3bE7650589E6A6171d454b026C4AD1a2C02720;
     address internal constant ALLOCATOR_INTERVAL_A_BUFFER = 0x67Ac5c8FbFDAc5265c995e9B2ACd830496438AfD;
 
-    // Deal rate limits (example values). Slope = cap / 1 day: a fully-consumed limit recharges
-    // linearly back to the cap over a day — the convention used across Sky ALM spells.
-    uint256 internal constant SUBSCRIBE_LIMIT = 5_000_000e18;
-    uint256 internal constant SUBSCRIBE_SLOPE = SUBSCRIBE_LIMIT / 1 days;
-    uint256 internal constant WITHDRAW_LIMIT  = 5_000_000e18;
-    uint256 internal constant WITHDRAW_SLOPE  = WITHDRAW_LIMIT / 1 days;
-    uint256 internal constant COLLECT_LIMIT   = 2_000_000e18;
-    uint256 internal constant COLLECT_SLOPE   = COLLECT_LIMIT / 1 days;
-    uint256 internal constant USDS_MINT_LIMIT = 1_000_000e18;
-    uint256 internal constant USDS_MINT_SLOPE = USDS_MINT_LIMIT / 1 days;
-
     address public immutable accessControls;
     address public immutable almProxy;
     address public immutable beacon;
@@ -114,19 +103,25 @@ contract NFATPrimeOnboardingPayload is NFATPayloadBase {
         IVaultLike(ALLOCATOR_INTERVAL_A_VAULT).rely(almProxy);
         IBufferLike(ALLOCATOR_INTERVAL_A_BUFFER).approve(USDS, almProxy, type(uint256).max);
 
-        // 4. Rate limits: deal-specific caps + slopes (inlined spell calls — deliberately not
-        //    init-library surface; the values are deal parameters).
+        // 4. Rate limits: deal-specific caps + slopes, inlined at the call site (Sky spell practice
+        //    for single-use values). Sky ALM convention: slope = cap / 1 day.
         IRateLimitsLike(rateLimits).setRateLimitData(
-            c.nfatPrime_getSubscribeRateLimitKey(facility, USDS), SUBSCRIBE_LIMIT, SUBSCRIBE_SLOPE
+            c.nfatPrime_getSubscribeRateLimitKey(facility, USDS),
+            5_000_000e18,
+            uint256(5_000_000e18) / 1 days
         );
         IRateLimitsLike(rateLimits).setRateLimitData(
-            c.nfatPrime_getWithdrawRateLimitKey(facility), WITHDRAW_LIMIT, WITHDRAW_SLOPE
+            c.nfatPrime_getWithdrawRateLimitKey(facility),
+            5_000_000e18,
+            uint256(5_000_000e18) / 1 days
         );
         IRateLimitsLike(rateLimits).setRateLimitData(
-            c.nfatPrime_getCollectRateLimitKey(facility), COLLECT_LIMIT, COLLECT_SLOPE
+            c.nfatPrime_getCollectRateLimitKey(facility),
+            2_000_000e18,
+            uint256(2_000_000e18) / 1 days
         );
         IRateLimitsLike(rateLimits).setRateLimitData(
-            c.usds_mintRateLimitKey(), USDS_MINT_LIMIT, USDS_MINT_SLOPE
+            c.usds_mintRateLimitKey(), 1_000_000e18, uint256(1_000_000e18) / 1 days
         );
     }
 
