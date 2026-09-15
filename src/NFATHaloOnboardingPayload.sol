@@ -190,8 +190,9 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
             revokers: revokers
         }));
 
-        // 3. NFAT: the deal facility — recipient + bud = THIS stack's ALMProxy. The Halo facet
-        //    issues and repays through it. No operators: issuance goes through the facet.
+        // 3. NFAT: the deal facility — recipient + sole bud = THIS stack's ALMProxy. The Halo facet
+        //    issues and repays through it; NFATInit kisses no other operators, since the facet can
+        //    only account for issuances made through the ALMProxy.
         //    (No chainlog registration: stars track addresses in their own registry.)
         // Incident response: a freezer (cop) can stop() the facility to halt issue / subscribe /
         // repay / collect immediately if something goes wrong with the deal.
@@ -204,7 +205,6 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
             almProxy:        almProxy,
             identityNetwork: address(0),
             baseURI:         "",
-            operators:       new address[](0),
             freezers:        freezers
         }));
 

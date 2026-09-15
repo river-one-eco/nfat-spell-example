@@ -11,9 +11,15 @@ interface IAdministeredAgentLike {
 
     function addRevoker(address account) external;
 
+    function actorCount() external view returns (uint256);
+
     function adminCount() external view returns (uint256);
 
     function getIsAdmin(address account) external view returns (bool);
+
+    function grantorCount() external view returns (uint256);
+
+    function revokerCount() external view returns (uint256);
 
 }
 
@@ -46,9 +52,11 @@ library AdministeredAgentInit {
 
     /**
      * @notice Configures an AdministeredAgent's roles in bulk.
-     * @dev    This function is NOT idempotent. The agent's add* functions reject duplicates, so
-     *         re-running init (or passing an address already holding a role) reverts. Unlike
-     *         PAUInit.init in diamond-pau, it cannot be safely applied twice.
+     * @dev    This function is NOT idempotent. It requires the agent to be inert (the executing
+     *         context as sole admin, and no actors, grantors or revokers) so that init establishes
+     *         the role sets rather than extending them. Re-running init after any role has been
+     *         configured therefore reverts. Unlike PAUInit.init in diamond-pau, it cannot be safely
+     *         applied twice.
      * @param  agent The agent to configure.
      * @param  p     Role configuration.
      */
@@ -60,6 +68,12 @@ library AdministeredAgentInit {
         // Sanity check: the executing context must be the agent's sole admin.
         require(agent_.getIsAdmin(address(this)), "AdministeredAgentInit/not-admin");
         require(agent_.adminCount() == 1,         "AdministeredAgentInit/not-sole-admin");
+
+        // Sanity check: the agent must be inert, so init establishes the role sets rather than
+        // extending sets configured outside of this spell.
+        require(agent_.actorCount()   == 0, "AdministeredAgentInit/actors-not-empty");
+        require(agent_.grantorCount() == 0, "AdministeredAgentInit/grantors-not-empty");
+        require(agent_.revokerCount() == 0, "AdministeredAgentInit/revokers-not-empty");
 
         for (uint256 i = 0; i < p.admins.length; ++i) {
             agent_.addAdmin(p.admins[i]);

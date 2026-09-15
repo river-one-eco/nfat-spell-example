@@ -22,6 +22,7 @@ interface NFATFacilityLike {
     function gem() external view returns (address);
     function name() external view returns (string memory);
     function symbol() external view returns (string memory);
+    function recipient() external view returns (address);
     function file(bytes32, address) external;
     function file(bytes32, string calldata) external;
     function kiss(address) external;
@@ -35,7 +36,6 @@ struct NFATConfig {
     address   almProxy;
     address   identityNetwork;
     string    baseURI;
-    address[] operators;
     address[] freezers;
 }
 
@@ -53,14 +53,20 @@ library NFATInit {
         require(facility_    != address(0), "NFATInit/facility-zero-address");
         require(cfg.almProxy != address(0), "NFATInit/alm-proxy-zero-address");
 
+        // Block re-initialization: a second run could not cleanly re-wire the facility for a
+        // different ALMProxy (the previous recipient would remain a bud), so refuse outright.
+        require(facility.recipient() == address(0), "NFATInit/recipient-already-set");
+
         // Validate the configured gem key explicitly
         require(cfg.gemKey == "USDS" || cfg.gemKey == "SUSDS", "NFATInit/gem-key-not-usds-or-susds");
         require(facility.gem() == dss.chainlog.getAddress(cfg.gemKey), "NFATInit/gem-mismatch");
         require(keccak256(bytes(facility.name()))   == keccak256(bytes(cfg.name)),   "NFATInit/name-mismatch");
         require(keccak256(bytes(facility.symbol())) == keccak256(bytes(cfg.symbol)), "NFATInit/symbol-mismatch");
 
-        // Structural wiring: the shared ALMProxy is both the recipient and a bud. This encodes the
-        // invariant previously guaranteed atomically by the retired DefaultNFATPAUAssembler.
+        // Structural wiring: the shared ALMProxy is both the recipient and the sole bud. This encodes
+        // the invariant previously guaranteed atomically by the retired DefaultNFATPAUAssembler.
+        // No additional operators are kissed: the Halo NFAT facet only tracks issuances made through
+        // the ALMProxy, so a third-party issuer would create positions it cannot account for or repay.
         facility.file("recipient", cfg.almProxy);
         facility.kiss(cfg.almProxy);
 
@@ -68,10 +74,6 @@ library NFATInit {
         if (cfg.identityNetwork != address(0)) facility.file("identityNetwork", cfg.identityNetwork);
         if (bytes(cfg.baseURI).length > 0)     facility.file("baseURI",         cfg.baseURI);
 
-        for (uint256 i = 0; i < cfg.operators.length; ++i) {
-            require(cfg.operators[i] != address(0), "NFATInit/operator-zero-address");
-            facility.kiss(cfg.operators[i]);
-        }
         for (uint256 i = 0; i < cfg.freezers.length; ++i) {
             require(cfg.freezers[i] != address(0), "NFATInit/freezer-zero-address");
             facility.addFreezer(cfg.freezers[i]);

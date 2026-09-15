@@ -1,18 +1,29 @@
+// SPDX-FileCopyrightText: © 2026 Dai Foundation <www.daifoundation.org>
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.34;
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+pragma solidity ^0.8.24;
 
 import "dss-interfaces/Interfaces.sol";
-import { ScriptTools }  from "dss-test/ScriptTools.sol";
+import { ScriptTools } from "dss-test/ScriptTools.sol";
+// Vendored from the nfat repo's `deploy/NFATDeploy.sol`; adapted ONLY in the import path below
+// (this repo consumes nfat as a submodule under lib/).
 import { NFATFacility } from "../../lib/nfat/src/NFATFacility.sol";
 
-/**
- * @title  NFATDeploy
- * @notice Deployment library for an NFAT facility, vendored from the nfat repo's `deploy/`
- *         scripts (adapted only in its `NFATFacility` import path). Deploys the facility against
- *         the chainlog-resolved gem and hands sole ward to `owner` via `ScriptTools.switchOwner`
- *         (rely(owner) + deny(deployer)), so the harness does not hand-roll the ownership swap.
- */
 library NFATDeploy {
+
 
     function deploy(
         address deployer,
