@@ -40,9 +40,10 @@ payload shape those repos use.
 1. `PAUInit.init` — its stack's Controller roles + `[NFAT_HALO_FACET, PSM_FACET, TRANSFER_ASSET_FACET]`;
 2. `PAUInit.addAllocator` + `AdministeredAgentInit.init` — agent as allocator, relayer as actor;
 3. `NFATInit.init` — **the deal facility**, wired with recipient + bud = the HALO ALMProxy (the
-   facility belongs to this side; the facet issues/repays through it). 
-   on-chain, `chainlog.wards(INTERVAL_SUBPROXY) == 0` — and stars track addresses in their own
-   registry, as pattern-spells / spark-spells do;
+   facility belongs to this side; the facet issues/repays through it). No chainlog registration:
+   the Sky chainlog is PauseProxy-writable only (verified on-chain,
+   `chainlog.wards(INTERVAL_SUBPROXY) == 0`), and stars track addresses in their own registry, as
+   pattern-spells / spark-spells do;
 4. `nfatHalo_setMaxAnnualGrowthRate` — 20% APR deal risk parameter;
 5. **rate limits**:
    - **issue** — one limit per subscriber, keyed on that Prime star's ALMProxy, with its own cap + slope;
