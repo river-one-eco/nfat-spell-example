@@ -55,8 +55,7 @@ library AdministeredAgentInit {
      * @dev    This function is NOT idempotent. It requires the agent to be inert (the executing
      *         context as sole admin, and no actors, grantors or revokers) so that init establishes
      *         the role sets rather than extending them. Re-running init after any role has been
-     *         configured therefore reverts. Unlike PAUInit.init in diamond-pau, it cannot be safely
-     *         applied twice.
+     *         configured therefore reverts.
      * @param  agent The agent to configure.
      * @param  p     Role configuration.
      */
