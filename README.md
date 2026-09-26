@@ -38,7 +38,8 @@ payload shape those repos use.
 **`src/NFATHaloOnboardingPayload.sol`** — the **facility-operator (borrower) side**:
 
 1. `PAUInit.init` — its stack's Controller roles + `[NFAT_HALO_FACET, PSM_FACET, TRANSFER_ASSET_FACET]`;
-2. `PAUInit.addAllocator` + `AdministeredAgentInit.init` — agent as allocator, relayer as actor;
+2. `PAUInit.addAllocator` + `AdministeredAgentInit.init` — agent as allocator, relayer as actor,
+   revoker for incident response;
 3. `NFATInit.init` — **the deal facility**, wired with recipient + bud = the HALO ALMProxy (the
    facility belongs to this side; the facet issues/repays through it). No chainlog registration:
    the Sky chainlog is PauseProxy-writable only (verified on-chain,
@@ -66,7 +67,8 @@ the facility is not this star's:
 
 1. `PAUInit.init` — its stack's Controller roles + `[NFAT_PRIME_FACET, USDS_FACET]` (no PSM —
    this side only mints and deploys USDS);
-2. `PAUInit.addAllocator` + `AdministeredAgentInit.init` — agent as allocator, relayer as actor;
+2. `PAUInit.addAllocator` + `AdministeredAgentInit.init` — agent as allocator, relayer as actor,
+   revoker for incident response;
 3. **USDS mint wiring** — `usds_setVault(ALLOCATOR_INTERVAL_A_VAULT)`, `vault.rely(almProxy)`,
    `buffer.approve(usds, almProxy, ∞)` (the SubProxy owns the Interval vault `0xDD3b…2720` and
    buffer `0x67Ac…8AfD` — same wiring as spark's `initAlmSystem`);

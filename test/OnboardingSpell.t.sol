@@ -70,7 +70,7 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         // Facility side first (it initializes the facility), then the subscriber side.
         _executePayload(address(_newHaloPayload(subs)));
         _executePayload(address(new NFATPrimeOnboardingPayload(
-            pauPrime, agentPrime, facility, relayerPrime
+            pauPrime, agentPrime, facility, relayerPrime, revokerPrime
         )));
     }
 
@@ -139,6 +139,9 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         );
         assertTrue(IAccessControlLike(pauPrime.accessControls).hasRole(ALLOCATOR_ROLE, agentPrime));
         assertTrue(IAdministeredAgentLike(agentPrime).getIsActor(relayerPrime));
+
+        // Incident-response role: a revoker on the agent (can cut off the relayer).
+        assertTrue(IAdministeredAgentLike(agentPrime).getIsRevoker(revokerPrime));
 
         assertEq(INFATFacilityLike(facility).buds(pauPrime.almProxy), 0);
 
@@ -524,6 +527,17 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         vm.expectRevert(abi.encodeWithSignature("NotActor()"));
         _haloCall(abi.encodeWithSelector(
             IControllerDispatchLike.psm_swapUSDSToUSDC.selector, uint256(1)
+        ));
+
+        // Same lever on the Prime side: its revoker cuts off the Prime relayer.
+        assertTrue(IAdministeredAgentLike(agentPrime).getIsActor(relayerPrime));
+        vm.prank(revokerPrime);
+        IAdministeredAgentLike(agentPrime).removeActor(relayerPrime);
+        assertFalse(IAdministeredAgentLike(agentPrime).getIsActor(relayerPrime));
+
+        vm.expectRevert(abi.encodeWithSignature("NotActor()"));
+        _primeCall(abi.encodeWithSelector(
+            IControllerDispatchLike.usds_mint.selector, uint256(1)
         ));
 
         // 3. Governance (the SubProxy admin) revokes the allocator role from the agent. This

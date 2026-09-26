@@ -72,7 +72,8 @@ abstract contract SpellRunner is Test {
     address internal relayerPrime    = makeAddr("relayerPrime"); // subscriber-side operator
     address internal relayerHalo     = makeAddr("relayerHalo");  // facility-side operator
     address internal borrower        = makeAddr("borrower");     // deal custodian / offramp destination
-    address internal revokerHalo     = makeAddr("revokerHalo");  // incident response: revoke the relayer
+    address internal revokerPrime    = makeAddr("revokerPrime"); // incident response: revoke Prime relayer
+    address internal revokerHalo     = makeAddr("revokerHalo");  // incident response: revoke Halo relayer
     address internal facilityFreezer = makeAddr("facilityFreezer"); // incident response: stop the facility
 
     PAUInstance internal pauPrime;

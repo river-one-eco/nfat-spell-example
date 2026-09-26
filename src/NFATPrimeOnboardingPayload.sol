@@ -32,7 +32,8 @@ interface IBufferLike {
  *
  *         1. PAUInit.init — this stack's Controller roles + [NFAT_PRIME, USDS] integrations
  *            (facet registration on the Beacon is a Sky-core action);
- *         2. PAUInit.addAllocator + AdministeredAgentInit.init — agent routing for the relayer;
+ *         2. PAUInit.addAllocator + AdministeredAgentInit.init — agent routing for the relayer,
+ *            plus a revoker for incident response (can cut off a compromised relayer);
  *         3. USDS mint wiring — the USDS facet draws from the Interval allocator vault:
  *            `usds_setVault`, `vault.rely(almProxy)`, `buffer.approve(usds, almProxy)`;
  *         4. rate limits — subscribe / withdraw / collect on the deal facility and the USDS
@@ -55,8 +56,15 @@ contract NFATPrimeOnboardingPayload is NFATPayloadBase {
     address public immutable agent;
     address public immutable facility; // the Halo star's facility this PAU subscribes into
     address public immutable relayer;
+    address public immutable revoker;  // incident response: can revoke the relayer (agent actor)
 
-    constructor(PAUInstance memory pau, address agent_, address facility_, address relayer_) {
+    constructor(
+        PAUInstance memory pau,
+        address agent_,
+        address facility_,
+        address relayer_,
+        address revoker_
+    ) {
         accessControls = pau.accessControls;
         almProxy       = pau.almProxy;
         beacon         = pau.beacon;
@@ -65,6 +73,7 @@ contract NFATPrimeOnboardingPayload is NFATPayloadBase {
         agent          = agent_;
         facility       = facility_;
         relayer        = relayer_;
+        revoker        = revoker_;
     }
 
     function _execute() internal override {
@@ -87,11 +96,16 @@ contract NFATPrimeOnboardingPayload is NFATPayloadBase {
 
         address[] memory actors = new address[](1);
         actors[0] = relayer;
+
+        // Incident response: a revoker can removeActor(relayer) to cut off a compromised operator
+        // fast, without waiting on the governance path.
+        address[] memory revokers = new address[](1);
+        revokers[0] = revoker;
         AdministeredAgentInit.init(agent, AdministeredAgentInitParams({
             admins:   new address[](0), //Note: Add extra admins such as PAS if applicable
             actors:   actors,
             grantors: new address[](0), //Note: Add grantors if applicable
-            revokers: new address[](0)  //Note: Add revokers if applicable
+            revokers: revokers
         }));
 
         // 3. USDS mint wiring: the USDS facet mints by drawing from the Interval allocator vault
