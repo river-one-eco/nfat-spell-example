@@ -183,6 +183,7 @@ contract NFATHaloOnboardingPayload is NFATPayloadBase {
         // fast, without waiting on the governance path.
         address[] memory revokers = new address[](1);
         revokers[0] = revoker;
+
         AdministeredAgentInit.init(agent, AdministeredAgentInitParams({
             admins:   new address[](0), //Note: Add extra admins such as PAS if applicable
             actors:   actors,
