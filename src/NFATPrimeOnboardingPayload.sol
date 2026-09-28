@@ -13,6 +13,7 @@ import { IControllerDispatchLike } from "./interfaces/IControllerDispatchLike.so
 
 interface IRateLimitsLike {
     function setRateLimitData(bytes32 key, uint256 maxAmount, uint256 slope) external;
+    function setUnlimitedRateLimitData(bytes32 key) external;
 }
 
 interface IVaultLike {
@@ -45,7 +46,7 @@ interface INFATFacilityLike {
  *         3. USDS mint wiring — the USDS facet draws from the Interval allocator vault:
  *            `usds_setVault`, `vault.rely(almProxy)`, `buffer.approve(usds, almProxy)`;
  *         4. rate limits — subscribe / withdraw / collect on the deal facility and the USDS
- *            mint / burn limits, slope = cap / 1 day (Sky ALM convention). No PSM here: this side only
+ *            mint limit (slope = cap / 1 day) and unlimited burn. No PSM here: this side only
  *            mints and deploys USDS — swaps live on the Halo (facility-operator) side.
  */
 contract NFATPrimeOnboardingPayload is NFATPayloadBase {
@@ -152,9 +153,7 @@ contract NFATPrimeOnboardingPayload is NFATPayloadBase {
         IRateLimitsLike(rateLimits).setRateLimitData(
             c.usds_mintRateLimitKey(), 1_000_000e18, uint256(1_000_000e18) / 1 days
         );
-        IRateLimitsLike(rateLimits).setRateLimitData(
-            c.usds_burnRateLimitKey(), 1_000_000e18, uint256(1_000_000e18) / 1 days
-        );
+        IRateLimitsLike(rateLimits).setUnlimitedRateLimitData(c.usds_burnRateLimitKey());
     }
 
 }

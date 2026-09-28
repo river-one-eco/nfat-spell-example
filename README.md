@@ -75,7 +75,8 @@ the facility is not this star's:
 3. **USDS mint wiring** — `usds_setVault(ALLOCATOR_INTERVAL_A_VAULT)`, `vault.rely(almProxy)`,
    `buffer.approve(usds, almProxy, ∞)` (the SubProxy owns the Interval vault `0xDD3b…2720` and
    its buffer, read from `vault.buffer()` — same wiring as spark's `initAlmSystem`);
-4. **rate limits** — subscribe / withdraw / collect on the deal facility + USDS mint / burn.
+4. **rate limits** — subscribe / withdraw / collect on the deal facility + USDS mint, with an
+   unlimited burn limit.
 
 
 

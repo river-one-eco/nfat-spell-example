@@ -514,11 +514,7 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
             IERC20Like(usds).balanceOf(pauPrime.almProxy),
             subscribeAmount + interest - mintAmount
         );
-        assertEq(rlPrime.getCurrentRateLimit(cPrime.usds_burnRateLimitKey()), 0);
-
-        // 11. Slope recharge: the burn bucket recovers after ~a day.
-        vm.warp(block.timestamp + 1 days + 1 hours);
-        assertEq(rlPrime.getCurrentRateLimit(cPrime.usds_burnRateLimitKey()), 1_000_000e18);
+        assertEq(rlPrime.getCurrentRateLimit(cPrime.usds_burnRateLimitKey()), type(uint256).max);
     }
 
     /**********************************************************************************************/
