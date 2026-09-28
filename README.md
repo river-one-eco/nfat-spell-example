@@ -33,6 +33,9 @@ delegatecall its `execute()` — byte-for-byte the pattern-spells / obex-gov-rel
 Payloads inherit `NFATPayloadBase` (`execute()` / `isExecutable()` / `_execute()`), the same
 payload shape those repos use.
 
+The full list of Sky-core prerequisites (Beacon wires, kiss, SubProxy privileges) is in
+[SKY-CORE-DEPENDENCIES.md](SKY-CORE-DEPENDENCIES.md).
+
 ## The two payloads
 
 **`src/NFATHaloOnboardingPayload.sol`** — the **facility-operator (borrower) side**:
