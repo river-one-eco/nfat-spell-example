@@ -31,7 +31,8 @@ sets must cover those selectors too.
 
 ## 2. LitePSM kiss (PauseProxy-only)
 
-The PSM facet swaps through the LitePSM's `sellGemNoFee` / `buyGemNoFee`, which are
+Only needed if the deal uses the PSM, as this example's Halo side does (USDS/USDC
+conversion). The PSM facet swaps through the LitePSM's `sellGemNoFee` / `buyGemNoFee`, which are
 permissioned (kissed buds only), so the Halo ALMProxy must be `kiss`ed before `psm_swap*`
 works. This does not block the cast - the payload only sets the swap rate limits - but the
 swap leg is dead until the kiss lands.
