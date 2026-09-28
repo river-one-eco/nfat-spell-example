@@ -8,6 +8,8 @@ import { NFATHaloOnboardingPayload, Subscriber } from "../src/NFATHaloOnboarding
 
 import { NFATHaloOnboardingPayloadHarness } from "./NFATHaloOnboardingPayloadHarness.sol";
 
+import { NFATDeploy } from "./dependencies/NFATDeploy.sol";
+
 import { IControllerDispatchLike } from "../src/interfaces/IControllerDispatchLike.sol";
 
 import {
@@ -332,6 +334,22 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
 
         // Nothing on the Halo side was touched by the failed casts.
         assertEq(INFATFacilityLike(facility).recipient(), address(0));
+    }
+
+    /// @notice A SUSDS facility is a legal deployment (NFATInit accepts it), but the Prime payload
+    ///         is wired for USDS deals only - it must reject any other gem at cast time.
+    function test_execute_rejectsNonUSDSFacility() external {
+        vm.startPrank(deployer);
+        address susdsFacility = NFATDeploy.deploy(
+            deployer, executor, "SUSDS", "NFAT sUSDS Example Deal", "NFAT-SUSDS"
+        );
+        vm.stopPrank();
+
+        NFATPrimeOnboardingPayload payload = new NFATPrimeOnboardingPayload(
+            pauPrime, agentPrime, susdsFacility, relayerPrime, revokerPrime
+        );
+        vm.expectRevert(NFATPrimeOnboardingPayload.FacilityGemNotUSDS.selector);
+        payload.execute();
     }
 
     /// @notice The test harness holds at most three immutable subscriber triples.

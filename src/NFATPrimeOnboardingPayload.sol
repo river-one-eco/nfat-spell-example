@@ -24,12 +24,19 @@ interface IBufferLike {
     function approve(address asset, address spender, uint256 amount) external;
 }
 
+interface INFATFacilityLike {
+    function gem() external view returns (address);
+}
+
 /**
  * @title  NFATPrimeOnboardingPayload (example)
  * @notice Onboards the **subscriber / investor side** of an NFAT deal. The Prime PAU invests
  *         INTO a facility operated by another star (the Halo side): it mints USDS, subscribes,
  *         holds the issued NFAT in its ALMProxy, and collects repayments. The facility is NOT
  *         this star's — it is initialized by the Halo payload, never here.
+ *
+ *         This payload is meant for USDS facilities only - `_execute` rejects any other
+ *         facility gem.
  *
  *         1. PAUInit.init — this stack's Controller roles + [NFAT_PRIME, USDS] integrations
  *            (facet registration on the Beacon is a Sky-core action);
@@ -58,6 +65,8 @@ contract NFATPrimeOnboardingPayload is NFATPayloadBase {
     address public immutable relayer;
     address public immutable revoker;  // incident response: can revoke the relayer (agent actor)
 
+    error FacilityGemNotUSDS();
+
     constructor(
         PAUInstance memory pau,
         address agent_,
@@ -77,6 +86,9 @@ contract NFATPrimeOnboardingPayload is NFATPayloadBase {
     }
 
     function _execute() internal override {
+        // Fail fast on a non-USDS facility, before any state is touched.
+        if (INFATFacilityLike(facility).gem() != USDS) revert FacilityGemNotUSDS();
+
         PAUInstance memory pau = PAUInstance({
             accessControls: accessControls,
             almProxy:       almProxy,
