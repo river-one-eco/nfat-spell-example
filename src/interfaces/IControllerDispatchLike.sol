@@ -76,6 +76,8 @@ interface IControllerDispatchLike {
 
     function usds_mintRateLimitKey() external pure returns (bytes32 key);
 
+    function usds_burnRateLimitKey() external pure returns (bytes32 key);
+
     // --- TransferAsset facet (live on the canonical Beacon) ---
 
     function transferAsset_transfer(address asset, address destination, uint256 amount) external;

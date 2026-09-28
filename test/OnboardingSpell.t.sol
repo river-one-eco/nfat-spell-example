@@ -416,8 +416,20 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
             IControllerDispatchLike.nfatPrime_subscribe.selector, facility, subscribeAmount, ""
         ));
         assertEq(INFATFacilityLike(facility).deposits(pauPrime.almProxy), subscribeAmount);
+        assertEq(
+            rlPrime.getCurrentRateLimit(cPrime.nfatPrime_getSubscribeRateLimitKey(facility, usds)),
+            5_000_000e18 - subscribeAmount
+        );
 
-        // 3. Halo issues a 1M NFAT against Prime's subscription: the NFT goes to the PRIME
+        // 3. Slope recharge: the consumed limits recover after ~a day.
+        vm.warp(block.timestamp + 1 days + 1 hours);
+        assertEq(rlPrime.getCurrentRateLimit(cPrime.usds_mintRateLimitKey()), 1_000_000e18);
+        assertEq(
+            rlPrime.getCurrentRateLimit(cPrime.nfatPrime_getSubscribeRateLimitKey(facility, usds)),
+            5_000_000e18
+        );
+
+        // 4. Halo issues a 1M NFAT against Prime's subscription: the NFT goes to the PRIME
         //    ALMProxy (the investor), the principal flows to the HALO ALMProxy (the recipient).
         _haloCall(abi.encodeWithSelector(
             IControllerDispatchLike.nfatHalo_issue.selector,
@@ -433,7 +445,7 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         assertTrue(issued);
         assertEq(outstandingPrincipal, issueAmount);
 
-        // 4. Prime withdraws its unissued 1M deposit.
+        // 5. Prime withdraws its unissued 1M deposit.
         _primeCall(abi.encodeWithSelector(
             IControllerDispatchLike.nfatPrime_withdraw.selector,
             facility, subscribeAmount - issueAmount
@@ -441,7 +453,7 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         assertEq(INFATFacilityLike(facility).deposits(pauPrime.almProxy), 0);
         assertEq(IERC20Like(usds).balanceOf(pauPrime.almProxy),           subscribeAmount - issueAmount);
 
-        // 5. Halo deploys the principal off-chain: converts USDS -> USDC through the LitePSM
+        // 6. Halo deploys the principal off-chain: converts USDS -> USDC through the LitePSM
         //    (tin = tout = 0), then OFFRAMPS the USDC to the deal's borrower destination via the
         //    TransferAsset facet — the only rate-limited exit from the proxy.
         _haloCall(abi.encodeWithSelector(
@@ -461,14 +473,14 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
             2_000_000e6 - swapAmount
         );
 
-        // 6. Interest accrues for 180 days at the Halo payload's 20% APR cap
+        // 7. Interest accrues for 180 days at the Halo payload's 20% APR cap
         //    (~1M * 20% * 180/365 ≈ 98,630 USDS).
         vm.warp(block.timestamp + 180 days);
 
         uint256 interest = cHalo.nfatHalo_getCurrentMaxOutstandingInterest(facility, tokenId);
         assertApproxEqAbs(interest, 98_630e18, 1e18);
 
-        // 7. Halo repays interest then full principal out of its ALMProxy (top up the interest
+        // 8. Halo repays interest then full principal out of its ALMProxy (top up the interest
         //    portion — in production that liquidity comes from the deployed principal's yield).
         deal(usds, pauHalo.almProxy, issueAmount + interest);
 
@@ -483,7 +495,7 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         assertEq(outstandingPrincipal, 0);
         assertEq(IERC20Like(usds).balanceOf(pauHalo.almProxy), 0);
 
-        // 8. Prime collects principal + interest (the NFAT owner is its ALMProxy).
+        // 9. Prime collects principal + interest (the NFAT owner is its ALMProxy).
         assertEq(INFATFacilityLike(facility).collectable(tokenId), issueAmount + interest);
 
         _primeCall(abi.encodeWithSelector(
@@ -495,13 +507,18 @@ contract OnboardingSpell_Fork_Test is SpellRunner {
         assertEq(IERC20Like(usds).balanceOf(pauPrime.almProxy), subscribeAmount + interest);
         assertEq(INFATFacilityLike(facility).collectable(tokenId), 0);
 
-        // 9. Slope recharge: limits recover after ~a day.
-        vm.warp(block.timestamp + 1 days + 1 hours);
-        assertEq(rlPrime.getCurrentRateLimit(cPrime.usds_mintRateLimitKey()), 1_000_000e18);
+        // 10. Prime unwinds its vault debt: burns back the 1M USDS it minted in step 1
+        //     (ALMProxy -> buffer -> vault wipe).
+        _primeCall(abi.encodeWithSelector(IControllerDispatchLike.usds_burn.selector, mintAmount));
         assertEq(
-            rlPrime.getCurrentRateLimit(cPrime.nfatPrime_getSubscribeRateLimitKey(facility, usds)),
-            5_000_000e18
+            IERC20Like(usds).balanceOf(pauPrime.almProxy),
+            subscribeAmount + interest - mintAmount
         );
+        assertEq(rlPrime.getCurrentRateLimit(cPrime.usds_burnRateLimitKey()), 0);
+
+        // 11. Slope recharge: the burn bucket recovers after ~a day.
+        vm.warp(block.timestamp + 1 days + 1 hours);
+        assertEq(rlPrime.getCurrentRateLimit(cPrime.usds_burnRateLimitKey()), 1_000_000e18);
     }
 
     /**********************************************************************************************/

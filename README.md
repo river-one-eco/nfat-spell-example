@@ -72,7 +72,7 @@ the facility is not this star's:
 3. **USDS mint wiring** — `usds_setVault(ALLOCATOR_INTERVAL_A_VAULT)`, `vault.rely(almProxy)`,
    `buffer.approve(usds, almProxy, ∞)` (the SubProxy owns the Interval vault `0xDD3b…2720` and
    its buffer, read from `vault.buffer()` — same wiring as spark's `initAlmSystem`);
-4. **rate limits** — subscribe / withdraw / collect on the deal facility + USDS mint.
+4. **rate limits** — subscribe / withdraw / collect on the deal facility + USDS mint / burn.
 
 
 
@@ -93,8 +93,9 @@ the facility is not this star's:
   100k of the received principal USDS→USDC through the LitePSM and offramps it to the borrower
   via the TransferAsset facet** (the rate-limited exit door) → 180 days accrue at
   the 20% APR cap (~98,630 USDS interest, read via `nfatHalo_getCurrentMaxOutstandingInterest`) →
-  Halo repays interest then full principal → Prime collects, ending with its full 2M back plus
-  the earned interest. Limit consumption and slope recharge asserted throughout.
+  Halo repays interest then full principal → Prime collects its full 2M back plus the earned
+  interest → Prime **burns the minted 1M back**, retiring its vault debt. Limit consumption and
+  slope recharge asserted throughout.
 
 ```bash
 cp .env.example .env   # set MAINNET_RPC_URL
