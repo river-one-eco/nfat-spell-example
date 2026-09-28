@@ -1,0 +1,14 @@
+[submodule "lib/forge-std"]
+	path = lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "lib/dss-test"]
+	path = lib/dss-test
+	url = https://github.com/makerdao/dss-test
+[submodule "lib/nfat"]
+	path = lib/nfat
+	url = https://github.com/river-one-eco/nfat
+	branch = dev
+[submodule "lib/diamond-pau"]
+	path = lib/diamond-pau
+	url = https://github.com/river-one-eco/diamond-pau
+	branch = dev
